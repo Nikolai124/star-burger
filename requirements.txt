@@ -2,3 +2,6 @@ django==5.2.*
 django-debug-toolbar==5.2.*
 Pillow==11.2.*
 environs[django]==14.2.*
+djangorestframework==3.16.*
+django-phonenumber-field[phonenumberslite]==8.*
+requests==2.32.*

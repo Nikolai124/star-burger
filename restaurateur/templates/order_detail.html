@@ -1,0 +1,63 @@
+{% extends 'base_restaurateur_page.html' %}
+
+{% block title %}Заказ #{{ order.id }} | Star Burger{% endblock %}
+
+{% block content %}
+  <center>
+    <h2>Заказ #{{ order.id }}</h2>
+  </center>
+
+  <hr/>
+  <br/>
+  <div class="container">
+    <p><a href="{% url 'restaurateur:view_orders' %}">← Все заказы</a></p>
+
+    <table class="table">
+      <tr>
+        <th>Статус</th>
+        <td>{{ order.get_status_display }}</td>
+      </tr>
+      <tr>
+        <th>Способ оплаты</th>
+        <td>{{ order.get_payment_method_display|default:"Не указан" }}</td>
+      </tr>
+      <tr>
+        <th>Клиент</th>
+        <td>{{ order.firstname }} {{ order.lastname }}</td>
+      </tr>
+      <tr>
+        <th>Телефон</th>
+        <td><a href="tel:{{ order.phonenumber }}">{{ order.phonenumber }}</a></td>
+      </tr>
+      <tr>
+        <th>Адрес доставки</th>
+        <td>{{ order.address }}</td>
+      </tr>
+    </table>
+
+    <h3>Товары</h3>
+    <table class="table table-responsive">
+      <tr>
+        <th>Товар</th>
+        <th>Цена</th>
+        <th>Количество</th>
+        <th>Сумма</th>
+      </tr>
+      {% for item in order.items.all %}
+        <tr>
+          <td>{{ item.product.name }}</td>
+          <td>{{ item.price|floatformat:"-2" }} руб.</td>
+          <td>{{ item.quantity }}</td>
+          <td>{{ item.cost|floatformat:"-2" }} руб.</td>
+        </tr>
+      {% endfor %}
+      <tr>
+        <th colspan="3">Итого</th>
+        <th>{{ order.total_cost|default:0|floatformat:"-2" }} руб.</th>
+      </tr>
+    </table>
+
+    <a class="btn btn-primary" href="{% url 'restaurateur:edit_order' order.id %}">Редактировать</a>
+    <a class="btn btn-link" href="{% url 'admin:foodcartapp_order_change' order.id %}">Открыть в админке</a>
+  </div>
+{% endblock %}

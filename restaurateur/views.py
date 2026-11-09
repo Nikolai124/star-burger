@@ -1,5 +1,7 @@
 from django import forms
-from django.shortcuts import redirect, render
+from django.db import transaction
+from django.db.models import F, Prefetch
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.urls import reverse_lazy
 from django.contrib.auth.decorators import user_passes_test
@@ -8,7 +10,8 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth import views as auth_views
 
 
-from foodcartapp.models import Product, Restaurant
+from foodcartapp.geocoding import calculate_distance, get_addresses_coordinates
+from foodcartapp.models import Order, OrderItem, Product, Restaurant, RestaurantMenuItem
 
 
 class Login(forms.Form):
@@ -26,6 +29,33 @@ class Login(forms.Form):
             'placeholder': 'Введите пароль'
         })
     )
+
+
+class OrderForm(forms.ModelForm):
+    class Meta:
+        model = Order
+        fields = ['status', 'payment_method', 'comment', 'firstname', 'lastname', 'phonenumber', 'address']
+        widgets = {
+            'status': forms.Select(attrs={'class': 'form-control'}),
+            'payment_method': forms.Select(attrs={'class': 'form-control'}),
+            'comment': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'firstname': forms.TextInput(attrs={'class': 'form-control'}),
+            'lastname': forms.TextInput(attrs={'class': 'form-control'}),
+            'phonenumber': forms.TextInput(attrs={'class': 'form-control'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+
+
+OrderItemFormSet = forms.inlineformset_factory(
+    Order,
+    OrderItem,
+    fields=['quantity'],
+    extra=0,
+    can_delete=False,
+    widgets={
+        'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+    },
+)
 
 
 class LoginView(View):
@@ -92,6 +122,77 @@ def view_restaurants(request):
 
 @user_passes_test(is_manager, login_url='restaurateur:login')
 def view_orders(request):
+    available_menu_items = (
+        RestaurantMenuItem.objects
+        .filter(availability=True)
+        .select_related('restaurant')
+    )
+    orders = (
+        Order.objects
+        .exclude(status=Order.Status.DONE)
+        .defer('comment')
+        .with_total_cost()
+        .prefetch_related(
+            Prefetch('items__product', queryset=Product.objects.only('name')),
+            Prefetch('items__product__menu_items', queryset=available_menu_items),
+        )
+        .order_by('-created_at')
+    )
+    addresses_coordinates = get_addresses_coordinates(order.address for order in orders)
+    for order in orders:
+        order.coordinates = addresses_coordinates[order.address]
+        order.available_restaurants = []
+        for restaurant in order.get_available_restaurants():
+            distance = None
+            if order.coordinates and restaurant.coordinates:
+                distance = calculate_distance(order.coordinates, restaurant.coordinates)
+            order.available_restaurants.append((restaurant, distance))
+        order.available_restaurants.sort(
+            key=lambda restaurant_distance: (restaurant_distance[1] is None, restaurant_distance[1]),
+        )
+
     return render(request, template_name='order_items.html', context={
-        # TODO заглушка для нереализованного функционала
+        'order_items': orders,
+    })
+
+
+@user_passes_test(is_manager, login_url='restaurateur:login')
+def view_order(request, order_id):
+    items = (
+        OrderItem.objects
+        .select_related('product')
+        .annotate(cost=F('price') * F('quantity'))
+    )
+    order = get_object_or_404(
+        Order.objects
+        .with_total_cost()
+        .prefetch_related(Prefetch('items', queryset=items)),
+        pk=order_id,
+    )
+    return render(request, template_name='order_detail.html', context={
+        'order': order,
+    })
+
+
+@user_passes_test(is_manager, login_url='restaurateur:login')
+def edit_order(request, order_id):
+    order = get_object_or_404(Order, pk=order_id)
+    items = order.items.select_related('product')
+
+    if request.method == 'POST':
+        form = OrderForm(request.POST, instance=order)
+        formset = OrderItemFormSet(request.POST, instance=order, queryset=items)
+        if form.is_valid() and formset.is_valid():
+            with transaction.atomic():
+                form.save()
+                formset.save()
+            return redirect('restaurateur:view_order', order_id=order.id)
+    else:
+        form = OrderForm(instance=order)
+        formset = OrderItemFormSet(instance=order, queryset=items)
+
+    return render(request, template_name='order_edit.html', context={
+        'order': order,
+        'form': form,
+        'formset': formset,
     })

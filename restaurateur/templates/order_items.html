@@ -14,17 +14,71 @@
    <table class="table table-responsive">
     <tr>
       <th>ID заказа</th>
+      <th>Создан</th>
       <th>Клиент</th>
       <th>Телефон</th>
       <th>Адрес доставки</th>
+      <th>Стоимость заказа</th>
+      <th>Способ оплаты</th>
+      <th>Могут выполнить</th>
+      <th>Товары</th>
+      <th>Действия</th>
     </tr>
 
-    {% for item in order_items %}
+    {% for order in order_items %}
       <tr>
-        <td>-</td>
-        <td>-</td>
-        <td>-</td>
-        <td>-</td>
+        <td><a href="{% url 'restaurateur:view_order' order.id %}">#{{ order.id }}</a></td>
+        <td>{{ order.created_at|date:"j E Y г. H:i" }}</td>
+        <td>{{ order.firstname }} {{ order.lastname }}</td>
+        <td><a href="tel:{{ order.phonenumber }}">{{ order.phonenumber }}</a></td>
+        <td>
+          {{ order.address }}
+          <br>
+          {% if order.coordinates %}
+            <small class="text-muted">{{ order.coordinates|join:", " }}</small>
+          {% else %}
+            <small class="text-danger">Не удалось определить координаты адреса</small>
+          {% endif %}
+        </td>
+        <td>{{ order.total_cost|default:0|floatformat:"-2" }} руб.</td>
+        <td>{{ order.get_payment_method_display|default:"Не указан" }}</td>
+        <td>
+          {% if order.available_restaurants %}
+            <ul>
+              {% for restaurant, distance in order.available_restaurants %}
+                <li>
+                  {% if forloop.first and distance is not None %}
+                    <strong>{{ restaurant.name }}</strong>
+                  {% else %}
+                    {{ restaurant.name }}
+                  {% endif %}
+                  {% if distance is not None %}
+                    ({{ distance|floatformat:2 }} км)
+                  {% else %}
+                    (расстояние неизвестно)
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <span class="text-danger">Нет подходящих ресторанов</span>
+          {% endif %}
+        </td>
+        <td>
+          <a data-toggle="collapse" href="#order-items-{{ order.id }}">Посмотреть товары ({{ order.items.all|length }})</a>
+          <ul class="collapse" id="order-items-{{ order.id }}">
+            {% for item in order.items.all %}
+              <li>{{ item.product.name }} × {{ item.quantity }}</li>
+            {% endfor %}
+          </ul>
+        </td>
+        <td>
+          <a class="btn btn-default btn-xs" href="{% url 'restaurateur:edit_order' order.id %}">Редактировать</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="10" class="text-center">Заказов пока нет</td>
       </tr>
     {% endfor %}
    </table>

@@ -3,6 +3,8 @@ from django.shortcuts import reverse
 from django.templatetags.static import static
 from django.utils.html import format_html
 
+from .models import Order
+from .models import OrderItem
 from .models import Product
 from .models import ProductCategory
 from .models import Restaurant
@@ -104,3 +106,32 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(ProductCategory)
 class ProductAdmin(admin.ModelAdmin):
     pass
+
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = [
+        'firstname',
+        'lastname',
+        'phonenumber',
+        'address',
+        'get_total_cost',
+    ]
+    inlines = [
+        OrderItemInline
+    ]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).with_total_cost()
+
+    def get_total_cost(self, obj):
+        if obj.total_cost is None:
+            return 0
+        return round(obj.total_cost, 2)
+    get_total_cost.short_description = 'стоимость'
+    get_total_cost.admin_order_field = 'total_cost'

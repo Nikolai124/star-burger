@@ -1,0 +1,58 @@
+{% extends 'base_restaurateur_page.html' %}
+
+{% block title %}Редактирование заказа #{{ order.id }} | Star Burger{% endblock %}
+
+{% block content %}
+  <center>
+    <h2>Редактирование заказа #{{ order.id }}</h2>
+  </center>
+
+  <hr/>
+  <br/>
+  <div class="container">
+    <p><a href="{% url 'restaurateur:view_order' order.id %}">← К заказу</a></p>
+
+    <form method="post">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% for field in form %}
+        <div class="form-group{% if field.errors %} has-error{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}
+            <span class="help-block">{{ error }}</span>
+          {% endfor %}
+        </div>
+      {% endfor %}
+
+      <h3>Товары</h3>
+      {{ formset.management_form }}
+      {{ formset.non_form_errors }}
+      <table class="table">
+        <tr>
+          <th>Товар</th>
+          <th>Цена</th>
+          <th>Количество</th>
+        </tr>
+        {% for item_form in formset %}
+          <tr>
+            <td>
+              {{ item_form.id }}
+              {{ item_form.instance.product.name }}
+            </td>
+            <td>{{ item_form.instance.price|floatformat:"-2" }} руб.</td>
+            <td class="{% if item_form.quantity.errors %}has-error{% endif %}">
+              {{ item_form.quantity }}
+              {% for error in item_form.quantity.errors %}
+                <span class="help-block">{{ error }}</span>
+              {% endfor %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+
+      <button type="submit" class="btn btn-primary">Сохранить</button>
+      <a class="btn btn-default" href="{% url 'restaurateur:view_order' order.id %}">Отмена</a>
+    </form>
+  </div>
+{% endblock %}
